@@ -27,17 +27,40 @@ jobs:
         cd /home/vmukti/ambicam
         ls -la && pwd
 
+        # Initialize Git repository only if it doesn't exist
         if [ ! -d .git ]; then
           git init
         fi
-
+        
+        # Add remote only if it doesn't exist
         if ! git remote get-url origin &> /dev/null; then
           git remote add origin https://github.com/Rahulvmukti/Ambicam.git
           git remote set-url origin https://"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"@github.com/Rahulvmukti/Ambicam.git
         fi
-
+        
         git remote -v
         # Pull latest code from main branch
         git pull origin main
         ls -la && pwd
-        EOF
+        # Install backend dependencies
+        cd backend && npm install
+        # Install frontend dependencies and build
+        cd ../frontend && npm install && npm run build
+
+        # Check and restart backend service if inactive
+        SERVICE_STATUS=$(sudo systemctl is-active ambicam-backend.service)
+        if [ "\$SERVICE_STATUS" != "active" ]; then
+          echo 'Backend service is inactive, restarting...'
+          sudo systemctl restart ambicam-backend.service
+        else
+          echo 'Backend service is active.'
+        fi
+
+        # Check and restart frontend service if inactive
+        SERVICE_STATUS=$(sudo systemctl is-active ambicam-frontend.service)
+        if [ "\$SERVICE_STATUS" != "active" ]; then
+          echo 'Frontend service is inactive, restarting...'
+          sudo systemctl restart ambicam-frontend.service
+        else
+          echo 'Frontend service is active.'
+        fi 
