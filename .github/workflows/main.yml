@@ -26,4 +26,15 @@ jobs:
         ssh -o StrictHostKeyChecking=no ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} << EOF
         cd /home/vmukti/ambicam
         ls -la && pwd
+
+        if [ ! -d .git ]; then
+          git init
+        fi
+
+        if ! git remote get-url origin &> /dev/null; then
+          git remote add origin https://github.com/Rahulvmukti/Ambicam.git
+          git remote set-url origin https://"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"@github.com/Rahulvmukti/Ambicam.git
+        fi
+
+        git remote -v
         EOF
