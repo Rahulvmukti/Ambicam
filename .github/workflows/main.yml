@@ -37,4 +37,7 @@ jobs:
         fi
 
         git remote -v
+        # Pull latest code from main branch
+        git pull origin main
+        ls -la && pwd
         EOF
