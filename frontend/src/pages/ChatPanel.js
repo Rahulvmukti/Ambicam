@@ -1,125 +1,121 @@
-import React, { useState, useEffect } from "react";
 import {
   Box,
-  Grid,
-  Flex,
-  Text,
   Button,
-  Input,
+  Flex,
+  Grid,
+  GridItem,
+  HStack,
   IconButton,
-  useDisclosure,
+  Select,
   SimpleGrid,
-  useBreakpointValue,
   Skeleton,
+  SkeletonText,
+  Text,
+  Tooltip,
+  useBreakpointValue,
   useColorModeValue,
 } from "@chakra-ui/react";
-import {
-  AiOutlineSend,
-  AiOutlineMessage,
-  AiOutlineClose,
-} from "react-icons/ai";
-import MultipleView from "./MultipleView";
-import theme from "../theme";
-import axios from "axios";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { getMultipleCameras } from "../actions/cameraActions";
 import Player from "../components/Player";
-import { getAllCameras, getSingleCamera } from "../actions/cameraActions";
 import NoCameraFound from "../components/NoCameraFound";
+import { PullToRefreshify } from "react-pull-to-refreshify";
+import Loading from "../components/Loading";
+import { BsArrowsFullscreen } from "react-icons/bs";
 
-const ChatPanel = () => {
-  const { isOpen, onOpen, onClose } = useDisclosure();
-  const [message, setMessage] = useState("");
-  const [isRotated, setIsRotated] = useState(false);
-  const [device, setDevice] = useState([]);
-  const [deviceIds, setDeviceIds] = useState([]);
-  const [isToggled, setIsToggled] = React.useState(false); // Track switch state
-  const [videoUrl, setVideoUrl] = useState([]);
-  const [videoName, setVideoName] = useState([]);
-  const [noStream, setNoStream] = useState(false);
-  const [loading, setLoading] = useState(true); // Loading state
+function ChatPanel() {
   const isMobile = window.innerWidth < 768;
-  const bgColor = useColorModeValue("white", "#231F1F");
-  const handleOpen = () => {
-    onOpen();
-    setIsRotated(true);
+  const [cameras, setCameras] = useState({ data: [], totalPages: 0 });
+  const [isLoading, setIsLoading] = useState(true);
+  const [activePage, setActivePage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(isMobile ? 100 : 4);
+  const [gridOption, setGridOption] = useState("2x2");
+  const [gridLayout, setGridLayout] = useState("repeat(2, 1fr)");
+  const [isFullScreen, setIsFullScreen] = useState(false);
+  const containerRef = useRef(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const width = useBreakpointValue({ base: "100%" });
+  const bgColor = useColorModeValue("custom.primary", "custom.darkModePrimary");
+
+  const toggleFullScreen = () => {
+    const container = containerRef.current;
+    if (!isFullScreen) {
+      container?.requestFullscreen?.() ||
+        container?.mozRequestFullScreen?.() ||
+        container?.webkitRequestFullscreen?.() ||
+        container?.msRequestFullscreen?.();
+      container.style.overflow = "hidden";
+    } else {
+      document.exitFullscreen?.() ||
+        document.mozCancelFullScreen?.() ||
+        document.webkitExitFullscreen?.() ||
+        document.msExitFullscreen?.();
+    }
+    setIsFullScreen(!isFullScreen);
   };
 
-  const handleClose = () => {
-    onClose();
-    setIsRotated(false);
-  };
-
-  // Fetch all camera device IDs
-  const fetchAllCameras = async () => {
+  const fetchMultipleCameras = async () => {
+    setIsLoading(true);
     try {
-      const response = await getAllCameras(1, 1000, "", "");
-      const userDevices = response.cameras.map((camera) => camera.deviceId);
-      setDeviceIds(userDevices);
+      const response = await getMultipleCameras(activePage, itemsPerPage, "AI");
+      setCameras(response.data || { data: [], totalPages: 0 });
     } catch (error) {
-      console.error("Error fetching cameras:", error);
+      console.error("Error fetching AI cameras:", error);
+      setCameras({ data: [], totalPages: 0 });
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  useEffect(() => {
-    fetchAllCameras();
-  }, []);
+  // --- KEY CHANGE: Filter the response data on the frontend ---
+  // We use useMemo to only re-calculate this list when the camera data changes.
+  const filteredCameras = useMemo(() => {
+    if (!cameras.data) {
+      return []; // Return an empty array if there's no data
+    }
+    // Return a new array containing only cameras where plan is 300
+    // Using String() handles both number (300) and string ("300") values
+    return cameras.data.filter(camera => String(camera.plan) === 'DVR-300');
+  }, [cameras.data]);
 
-  useEffect(() => {
-    if (deviceIds.length === 0) return; // Ensure deviceIds are available before proceeding
 
-    const fetchStreamData = async () => {
-      setLoading(true); // Start loading
+  function renderText(pullStatus, percent) {
+    switch (pullStatus) {
+      case "pulling":
+        return (
+          <div style={{ display: "flex", alignItems: "center", height: 50 }}>
+            <Loading percent={percent} />
+            <div
+              style={{ whiteSpace: "nowrap", marginLeft: "8px" }}
+            >{`Pull down`}</div>
+          </div>
+        );
+      case "canRelease":
+        return `Release`;
+      case "refreshing":
+        return "Refreshing...";
+      case "complete":
+        return "Refresh succeed";
+      default:
+        return "";
+    }
+  }
+
+  const refreshMultipleCameras = () => {
+    return new Promise(async (resolve) => {
+      setRefreshing(true);
       try {
-        const response = await axios.get(
-          "https://zmedia.arcisai.io:443/rtmp/api/list"
-        );
-        const streamData = response.data;
-
-        // Filter streams based on device IDs
-        const filteredPaths = streamData.filter((item) =>
-          deviceIds.some((deviceId) => item.StreamName.includes(deviceId))
-        );
-
-        // Create a new array with updated AppName fetched from another API
-        const updatedPaths = await Promise.all(
-          filteredPaths.map(async (item) => {
-            try {
-              // Extract the value after 'RTSP-' from item.Path
-              const pathKey = item.Path.split("RTSP-")[1]; // Extract the part after 'RTSP-'
-              if (!pathKey) {
-                throw new Error(`Invalid path format: ${item.Path}`);
-              }
-
-              // Call the API to get the name using the extracted value
-              const nameResponse = await getSingleCamera(pathKey);
-              const nameData = nameResponse.data; // Assuming nameData contains the name
-              return { Path: item.Path, AppName: nameData.name || "Unknown" }; // Fallback to "Unknown" if name is missing
-            } catch (err) {
-              console.error("Error fetching name for stream:", err);
-              return { Path: item.Path, AppName: "Unknown" }; // Fallback to "Unknown" if API fails
-            }
-          })
-        );
-
-        if (updatedPaths.length > 0) {
-          setVideoUrl(updatedPaths.map((item) => item.Path));
-          setVideoName(updatedPaths.map((item) => item.AppName));
-          setNoStream(false);
-        } else {
-          setVideoUrl([]);
-          setNoStream(true);
-        }
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+        await fetchMultipleCameras();
+        resolve();
       } catch (error) {
-        console.error("Error fetching stream data:", error);
-        setNoStream(true);
+        console.error("Error during camera refresh:", error);
       } finally {
-        setLoading(false); // End loading
+        setRefreshing(false);
       }
-    };
+    });
+  };
 
-    fetchStreamData();
-  }, [deviceIds]);
-
-  const width = useBreakpointValue({ base: "100%" });
   const getResponsivePlayerStyle = () => ({
     width,
     height: "auto",
@@ -127,85 +123,250 @@ const ChatPanel = () => {
     borderRadius: "8px",
   });
 
+  const handleGridChange = (event) => {
+    const value = event.target.value;
+    setGridOption(value);
+    switch (value) {
+      case "2x2":
+        setGridLayout("repeat(2, 1fr)");
+        setActivePage(1);
+        setItemsPerPage(4);
+        break;
+      case "3x3":
+        setGridLayout("repeat(3, 1fr)");
+        setActivePage(1);
+        setItemsPerPage(9);
+        break;
+      default:
+        setGridLayout("repeat(2, 1fr)");
+        setActivePage(1);
+        setItemsPerPage(4);
+    }
+  };
+
+  const handlePageChange = (page) => {
+    setActivePage(page);
+  };
+
+  useEffect(() => {
+    fetchMultipleCameras();
+  }, [itemsPerPage, activePage]);
+
+  useEffect(() => {
+    const handleFullScreenChange = () => {
+      if (!document.fullscreenElement) {
+        setIsFullScreen(false);
+      }
+    };
+    document.addEventListener("fullscreenchange", handleFullScreenChange);
+    document.addEventListener("webkitfullscreenchange", handleFullScreenChange);
+    document.addEventListener("mozfullscreenchange", handleFullScreenChange);
+    document.addEventListener("MSFullscreenChange", handleFullScreenChange);
+    return () => {
+      document.removeEventListener("fullscreenchange", handleFullScreenChange);
+      document.removeEventListener("webkitfullscreenchange", handleFullScreenChange);
+      document.removeEventListener("mozfullscreenchange", handleFullScreenChange);
+      document.removeEventListener("MSFullscreenChange", handleFullScreenChange);
+    };
+  }, []);
+
   return (
-    <Box
-      maxW="1440px"
-      mx="auto"
-      // p={3}
-      height={isMobile ? "calc(100vh - 90px)" : "auto"}
-    >
-      {/* Video Feed Section */}
-      <Text fontSize={{ base: "lg", md: "2xl" }} fontWeight="bold">
-        AI Feeds
-      </Text>
-      {loading ? (
-        <SimpleGrid columns={2} spacing={2} mt={2}>
-          {[...Array(4)].map((_, index) => (
-            <Skeleton key={index} height="200px" borderRadius="md" />
+    <Box>
+      {isLoading ? (
+        <SimpleGrid columns={{base: 2, md: 3}} spacing={4} mt={{ base: "4", md: "2" }}>
+          {Array.from({ length: itemsPerPage }).map((_, index) => (
+            <GridItem key={index}>
+              <Skeleton height={{base: "120px", md:"242px"}} borderRadius="8px" />
+              <SkeletonText mt="4" noOfLines={2} spacing="4" />
+            </GridItem>
           ))}
         </SimpleGrid>
-      ) : noStream ? (
-        <NoCameraFound
-          title="Ai Feeds of"
-          description="Check camera subscriptions or contact our support."
-        />
-      ) : (
-        <SimpleGrid columns={2} spacing={2} mt={2}>
-          {videoUrl.map((aiurl, index) => (
-            <Box key={index}>
-              <Player
-                device={device}
-                style={getResponsivePlayerStyle()}
-                initialPlayUrl={`https://zmedia.arcisai.io:443/hdl/${aiurl}.flv`}
-                showControls={false}
-              />
-              <Text fontWeight="bold" fontSize="xs" p={1}>
-                {videoName[index] || "Unknown"}
-              </Text>
+      // --- Use the new filtered list for rendering ---
+      ) : filteredCameras.length > 0 ? (
+        <>
+          {isMobile ? (
+            <PullToRefreshify
+              refreshing={refreshing}
+              onRefresh={refreshMultipleCameras}
+              renderText={renderText}
+            >
+              <SimpleGrid columns={2} spacing={4} mt={4}>
+                {/* --- Map over filteredCameras --- */}
+                {filteredCameras.map((camera) => (
+                  <GridItem key={camera.deviceId}>
+                    <Box position="relative">
+                      {camera.status === "online" ? (
+                        <Player
+                          device={camera}
+                          initialPlayUrl={
+                            camera?.plan === "LIVE"
+                              ? `https://${camera?.deviceId}.${camera?.p2purl}/flv/live_ch0_0.flv?verify=${camera?.token}`
+                              : `wss://${camera?.mediaUrl}/jessica/DVR/${camera?.deviceId}-AI.flv`
+                          }
+                          width="100%"
+                          style={getResponsivePlayerStyle()}
+                          height="100%"
+                          showControls={false}
+                        />
+                      ) : (
+                        <Text>Camera NOT FOUND</Text>
+                      )}
+                    </Box>
+                    <HStack>
+                      <Text fontWeight="bold" fontSize="xs" p={1}>
+                        {camera.name}
+                      </Text>
+                    </HStack>
+                  </GridItem>
+                ))}
+              </SimpleGrid>
+            </PullToRefreshify>
+          ) : (
+            <Box maxW="1440px" mx="auto" mt={2}>
+              <Box
+                display="flex"
+                justifyContent="space-between"
+                alignItems="center"
+                flexDirection={{ base: "column", md: "row" }}
+              >
+                <Text fontSize={{ base: "lg", md: "2xl" }} fontWeight="bold">
+                  AI Multiscreen
+                </Text>
+                <Flex
+                  justifyContent={"space-between"}
+                  alignItems={"center"}
+                  gap={2}
+                >
+                  <Flex align="center" justify="center">
+                    <Button
+                      size="sm"
+                      onClick={() => handlePageChange(activePage - 1)}
+                      isDisabled={activePage === 1}
+                      mr={2}
+                    >
+                      Previous
+                    </Button>
+                    {/* Pagination still uses totalPages from the original API response */}
+                    {Array.from({ length: cameras.totalPages }, (_, i) => i + 1)
+                      .filter(
+                        (page) =>
+                          page === 1 ||
+                          page === cameras.totalPages ||
+                          (page >= activePage - 2 && page <= activePage + 2)
+                      )
+                      .map((page, index, array) => (
+                        <React.Fragment key={page}>
+                          {index > 0 && array[index - 1] !== page - 1 && (
+                            <Text mx={2}>...</Text>
+                          )}
+                          <Button
+                            size="sm"
+                            colorScheme={activePage === page ? "purple" : "gray"}
+                            variant={activePage === page ? "solid" : "outline"}
+                            onClick={() => handlePageChange(page)}
+                            mx={1}
+                          >
+                            {page}
+                          </Button>
+                        </React.Fragment>
+                      ))}
+                    <Button
+                      size="sm"
+                      onClick={() => handlePageChange(activePage + 1)}
+                      isDisabled={activePage === cameras.totalPages}
+                      ml={2}
+                    >
+                      Next
+                    </Button>
+                  </Flex>
+                  <Select
+                    bg={bgColor}
+                    width={{ base: "100%", md: "120px" }}
+                    mt={{ base: 2, md: 0 }}
+                    value={gridOption}
+                    onChange={handleGridChange}
+                    _hover={{ borderColor: "gray.400" }}
+                    borderRadius={"8px"}
+                  >
+                    <option value="2x2">2x2 Grid</option>
+                    <option value="3x3">3x3 Grid</option>
+                  </Select>
+                  <Tooltip label="Fullscreen" aria-label="Fullscreen Tooltip">
+                    <IconButton
+                      bg={bgColor}
+                      borderRadius={"8px"}
+                      icon={<BsArrowsFullscreen />}
+                      onClick={toggleFullScreen}
+                      boxSize={"10"}
+                      variant="outline"
+                      aria-label="Fullscreen"
+                      _hover={{ borderColor: "gray.400" }}
+                    />
+                  </Tooltip>
+                </Flex>
+              </Box>
+              <Grid
+                templateColumns={gridLayout}
+                gap={isFullScreen ? 2 : 6}
+                width="100%"
+                pt={2}
+                borderRadius="md"
+                boxShadow="sm"
+                ref={containerRef}
+                overflow={isFullScreen ? "auto" : "hidden"}
+              >
+                {/* --- Map over filteredCameras --- */}
+                {filteredCameras.map((camera) => (
+                  <Box key={camera.deviceId} position="relative">
+                    <Box position="relative">
+                      {camera.status === "online" ? (
+                        <Player
+                          device={camera}
+                          initialPlayUrl={
+                            camera?.plan === "LIVE"
+                              ? `https://${camera?.deviceId}.${camera?.p2purl}/flv/live_ch0_0.flv?verify=${camera?.token}`
+                              : `wss://${camera?.mediaUrl}/jessica/DVR/${camera?.deviceId}-AI.flv`
+                          }
+                          width="100%"
+                          style={getResponsivePlayerStyle()}
+                          height="100%"
+                          showControls={false}
+                        />
+                      ) : (
+                        <Text
+                          fontSize="lg"
+                          fontWeight="semibold"
+                          textAlign="center"
+                          p={4}
+                          color="red.500"
+                        >
+                          Camera NOT FOUND
+                        </Text>
+                      )}
+                    </Box>
+                    <HStack
+                      justifyContent="space-between"
+                      alignItems="center"
+                      display={isFullScreen ? "none" : "flex"}
+                    >
+                      <Text fontWeight="bold" fontSize="sm" p={1}>
+                        {camera.name}
+                      </Text>
+                    </HStack>
+                  </Box>
+                ))}
+              </Grid>
             </Box>
-          ))}
-        </SimpleGrid>
-      )}
-
-      {/* Floating Chat */}
-      <IconButton
-        position="fixed"
-        bottom="20px"
-        right="20px"
-        bg={theme.colors.custom.primary}
-        color="white"
-        borderRadius="full"
-        p={3}
-        shadow="lg"
-        onClick={isOpen ? handleClose : handleOpen}
-        icon={isOpen ? <AiOutlineClose /> : <AiOutlineMessage />}
-        aria-label="Chat Button"
-      />
-
-      {/* Chat Modal */}
-      {isOpen && (
-        <Box
-          position="fixed"
-          top="90px"
-          right="10px"
-          w="30%"
-          h="80%"
-          bg={bgColor}
-          borderLeftRadius="lg"
-          boxShadow="lg"
-          p={4}
-          zIndex="10"
-          overflowY="auto"
-          css={{
-            scrollbarWidth: "none",
-            "&::-webkit-scrollbar": {
-              display: "none",
-            },
-          }}
-        ></Box>
+          )}
+        </>
+      ) : (
+        <NoCameraFound
+          title="No Matching AI Cameras Found"
+          description="There are no cameras available with the specified plan."
+        />
       )}
     </Box>
   );
-};
+}
 
 export default ChatPanel;
