@@ -55,8 +55,8 @@ const CameraView = () => {
     //   ? `https://${device.deviceId}.${device.p2purl}/flv/live_ch0_0.flv?verify=${device.token}`
     //   : `https://${device.mediaUrl}/hdl/DVR/${device.deviceId}.flv`;
 
-       device?.plan === "LIVE"
-         ? `https://${device.deviceId}.${device.p2purl}/flv/live_ch0_0.flv?verify=${device.token}`
+      device?.plan === "DVR-300"
+         ? `wss://${device.mediaUrl}/jessica/DVR/${device.deviceId}-AI.flv`
          : `wss://${device.mediaUrl}/jessica/DVR/${device.deviceId}.flv`;
 
   // Function to fetch stream details
