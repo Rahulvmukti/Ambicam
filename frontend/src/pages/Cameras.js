@@ -504,13 +504,13 @@ const Cameras = () => {
             ...camera,
             imageUrl:
               parsedData.imageUrl ||
-              "https://ambicamdemo.vmukti.com/images/CameraCard.png", // Default fallback
+              "https://ambicam.vmukti.com/images/CameraCard.png", // Default fallback
             lastOpened: getTimeAgo(parsedData.timestamp),
           };
         }
         return {
           ...camera,
-          imageUrl: "https://ambicamdemo.vmukti.com/images/CameraCard.png", // Default fallback
+          imageUrl: "https://ambicam.vmukti.com/images/CameraCard.png", // Default fallback
           lastOpened: "N/A",
         };
       })
@@ -1142,6 +1142,7 @@ const Cameras = () => {
         >
           <TabList>
             <Tab
+               display='none' 
               _selected={{
                 bg: selectedTab,
                 color: tabActiveColor,
@@ -1158,6 +1159,7 @@ const Cameras = () => {
               My Cameras
             </Tab>
             <Tab
+                display='none' 
               _selected={{
                 bg: selectedTab,
                 color: tabActiveColor,
@@ -1540,7 +1542,7 @@ const Cameras = () => {
                   //   : null;
                   const imageUrl = camera.lastImage
                     ? camera.lastImage
-                    : "https://ambicamdemo.vmukti.com/images/icon2.png";
+                    : "https://ambicam.vmukti.com/images/icon2.png";
                   const timestamp = camera.timestamp ? camera.timestamp : null;
 
                   return (
@@ -1752,7 +1754,7 @@ const Cameras = () => {
                   //   };
                   const imageUrl = camera.lastImage
                     ? camera.lastImage
-                    : "https://ambicamdemo.vmukti.com/images/icon2.png";
+                    : "https://ambicam.vmukti.com/images/icon2.png";
                   const timestamp = camera.timestamp ? camera.timestamp : null;
 
                   return (
