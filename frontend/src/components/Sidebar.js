@@ -51,7 +51,7 @@ function Sidebar({ isSidebarExpanded, setSidebarExpanded }) {
       path: "/multiple",
     },
     { label: "Events", icon: <RiCalendarScheduleLine />, path: "/events" },
-    { label: "Reports", icon: <IoDocumentTextOutline />, path: "/reports" },
+    { label: "Reports", icon: <IoDocumentTextOutline />, path: "/analyticsimg" },
 
     // {
     //   label: "Plans",
