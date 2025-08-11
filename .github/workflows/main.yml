@@ -35,7 +35,7 @@ jobs:
         # Add remote only if it doesn't exist
         if ! git remote get-url origin &> /dev/null; then
           git remote add origin https://github.com/Rahulvmukti/Ambicam.git
-          git remote set-url origin https://"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"@github.com/Rahulvmukti/Ambicam.git
+          git remote set-url origin https://"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"@github.com/Rahulvmukti/Ambicam.git
         fi
         
         git remote -v
